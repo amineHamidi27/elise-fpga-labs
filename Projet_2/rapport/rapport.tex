@@ -1,0 +1,277 @@
+% =====================================================================
+%  Report - Project 2: FIR filter on FPGA (Red Pitaya)
+%  Build (from the rapport/ folder):
+%     pdflatex rapport.tex && pdflatex rapport.tex
+%  (2 passes for the table of contents and references)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+% ---------- Language / encoding ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+
+% ---------- Layout ----------
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage[per-mode=symbol]{siunitx}
+\sisetup{retain-explicit-plus}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+\setlength{\emergencystretch}{3em}
+% Allow line breaks after underscores in long signal names
+\let\oldunderscore\_
+\renewcommand{\_}{\oldunderscore\allowbreak}
+
+% ---------- Header / footer ----------
+\setlength{\headheight}{14pt}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{FPGA -- Project 2: FIR}
+\rhead{ELISE M2}
+\cfoot{\thepage}
+
+% ---------- VHDL code style ----------
+\definecolor{kw}{RGB}{0,0,160}
+\definecolor{cm}{RGB}{0,120,0}
+\definecolor{bg}{RGB}{247,247,247}
+\lstdefinestyle{vhdl}{
+  language=VHDL,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cm}\itshape,
+  backgroundcolor=\color{bg},
+  numbers=left, numberstyle=\tiny\color{gray},
+  frame=single, breaklines=true, showstringspaces=false,
+  tabsize=4, columns=fullflexible, keepspaces=true
+}
+\lstdefinestyle{sh}{
+  basicstyle=\ttfamily\footnotesize, backgroundcolor=\color{bg},
+  frame=single, breaklines=true, columns=fullflexible
+}
+% Allows accented characters in code comments
+\lstset{literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ç}{{\c c}}1 {ê}{{\^e}}1 {ù}{{\`u}}1}
+
+% Inserts a figure if the file exists, otherwise a "to add" placeholder box
+% usage: \fig{file_name}{caption}{label}
+\newcommand{\fig}[3]{%
+  \begin{figure}[H]\centering
+    \IfFileExists{figures/#1}
+      {\includegraphics[width=0.85\linewidth]{#1}}
+      {\fbox{\parbox[c][4cm][c]{0.8\linewidth}{\centering\color{gray}
+        Figure to add: \texttt{figures/\detokenize{#1}}}}}
+    \caption{#2}\label{#3}
+  \end{figure}}
+
+% Marker for text still to write (delete once done)
+\newcommand{\todo}[1]{\textcolor{red}{[To write: #1]}}
+
+
+% =====================================================================
+\begin{document}
+
+% ---------------------------- Title page ---------------------------
+\begin{titlepage}
+  \centering
+  {\large Université Marie et Louis Pasteur\par}
+  {\large ELISE Master -- 2\textsuperscript{nd} year\par}
+  \vspace{3cm}
+  {\Huge\bfseries Project 2: FIR\par}
+  \vspace{0.5cm}
+  {\Large Finite Impulse Response filters on FPGA\\(Red Pitaya, Zynq-7010)\par}
+  \vspace{3cm}
+  {\large \textbf{Authors:} LAST NAME First name -- LAST NAME First name\par}
+  \vspace{0.5cm}
+  {\large \textbf{Teacher:} NAME\par}
+  \vfill
+  {\large Academic year 2026--2027\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduction}
+\todo{goal of the project: FIR filter at $f_s = 125/8 = \SI{15.625}{\mega\hertz}$,
+low-pass in VHDL, band-pass with the FIR Compiler IP, PS/PL switching of the two
+filters from Linux. Recall the FIR equation $y(n) = \sum_k b_k\,x(n-k)$.}
+
+% =====================================================================
+\section{Low-pass filter coefficients (Octave)}
+\todo{fir1 call: order 4, $f_c = \SI{0.5}{\mega\hertz}$, $f_s = 125/8$ MHz;
+script \texttt{filter.m}; coefficients obtained}
+
+\fig{bode_lowpass.png}{Frequency response of the 4th-order low-pass filter (freqz)}{fig:bodelp}
+
+\paragraph{Real cutoff frequency.}
+\todo{measured $-6$ dB frequency and why it is not \SI{0.5}{\mega\hertz}
+(only 5 coefficients, wide transition band)}
+
+% =====================================================================
+\section{VHDL description of the low-pass filter}
+
+\subsection{Integer coefficients on 8 bits}
+\todo{lecture method: $n_F = 8 + 1 = 9$, scale $2^9 = 512$; table float /
+$\times 512$ / integer; sum = 512 (gain 1)}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccccc}
+\toprule
+ & $b_0$ & $b_1$ & $b_2$ & $b_3$ & $b_4$ \\
+\midrule
+Octave            & & & & & \\
+$\times 512$      & & & & & \\
+Integer           & & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Quantization of the coefficients}\label{tab:coef}
+\end{table}
+
+\subsection{Filter structure}
+\todo{entity (generics b0..b4, ports clk, enable, x, y on 14 bits unsigned);
+delay line x0..x4, products p0..p4 (22 bits), sum (23 bits), output
+\texttt{sum(22 downto 9)}; synchronous enable as in the lecture; latency}
+
+\fig{fir_structure.png}{Structure of the FIR filter}{fig:firstruct}
+
+\subsection{Testbench and simulation}
+\todo{testbench: clock 64 ns, constant inputs first (impulse 512, constant 16383),
+then sine inputs at 100 kHz, 500 kHz, 3.31 MHz, 5 MHz}
+
+\fig{sim_impulse_step.png}{Simulation: impulse (512) and constant input (16383)}{fig:simimp}
+\fig{sim_sines.png}{Simulation with sine inputs (same vertical scale for $x$ and $y$)}{fig:simsin}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ccccc}
+\toprule
+Frequency & $x$ (peak to peak) & $y$ (peak to peak) & Simulated gain & Octave gain \\
+\midrule
+\SI{100}{\kilo\hertz} & & & & \\
+\SI{500}{\kilo\hertz} & & & & \\
+\SI{3.31}{\mega\hertz} & & & & \\
+\SI{5}{\mega\hertz} & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Simulated attenuation compared with Octave}\label{tab:simgain}
+\end{table}
+
+\paragraph{Why 14 bits are enough at the output.}
+\todo{sum of coefficients = 512 = $2^9$, gain $\leq 1$, max sum
+$16383 \times 512 < 2^{23}$, shift by 9 bits}
+
+% =====================================================================
+\section{Encapsulation and test on the board}
+
+\subsection{Encapsulating file}
+\todo{based on ADC\_DAC.vhd: 8-state counter at 125 MHz, enable at 125/8 MHz,
+ADC channel A to the filter, filter to the DAC}
+
+\subsection{Synthesis}
+\todo{openXC7 commands; SITEWIRE/DSP48 error if it happens}
+
+\subsection{First test: shifted sine}
+\todo{generator 0.5 Vpp ($-0.25$ to $+0.25$ V); observation: truncated sine with
+shifted parts; explanation: +1 V gives code 0 and $-1$ V gives $2^{14}-1$}
+
+\fig{board_shifted.png}{Output before correcting the ADC code}{fig:shifted}
+
+\subsection{Correction of the ADC/DAC coding}
+\todo{correction in the encapsulating file and why it works}
+
+\subsection{Low-pass behaviour on the board}
+\todo{measurements at several frequencies, compare with Octave}
+
+\fig{board_lowpass.png}{Low-pass filter on the board}{fig:boardlp}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+Frequency & Input (Vpp) & Output (Vpp) & Gain (dB) \\
+\midrule
+ & & & \\
+\bottomrule
+\end{tabular}
+\caption{Measured attenuation of the low-pass filter}\label{tab:boardlp}
+\end{table}
+
+% =====================================================================
+\section{Band-pass filter with the FIR Compiler IP}
+
+\subsection{Coefficients (Octave)}
+\todo{fir1 order 30, band 2--2.5 MHz, $f_s = 125/8$ MHz; real cutoff
+frequencies}
+
+\fig{bode_bandpass.png}{Frequency response of the 30th-order band-pass filter}{fig:bodebp}
+
+\subsection{FIR Compiler configuration}
+\todo{coefficient vector, 15.625 MHz, coefficient width 8, best precision,
+signed 14-bit input, full precision output, tvalid at '1' with a Constant IP}
+
+\fig{fir_compiler.png}{FIR Compiler block design}{fig:fircomp}
+
+\subsection{Simulation in Vivado}
+\todo{testbench, latency (summary tab), results}
+
+\fig{sim_bandpass.png}{Simulation of the band-pass filter}{fig:simbp}
+
+\paragraph{Output on 14 bits.}
+\todo{which bits to keep for a 14-bit output, effect on the gain, comparison with
+the low-pass filter}
+
+% =====================================================================
+\section{PS/PL interaction: switching the two filters}
+
+\subsection{Block design}
+\todo{TP\_M2\_source project, the two filters, the switching .vhd file, slices,
+clk\_wiz at $f_s$; bus mapping: 16 LSBs = channel A, 16 MSBs = channel B, sign
+extension on the 2 MSBs}
+
+\fig{block_design_fir.png}{Block design with the two filters}{fig:bdfir}
+
+\subsection{Switching file}
+\todo{GPIO bit 0 = '0': low-pass on DAC A, band-pass on DAC B; '1': swapped}
+
+\subsection{Programming and devmem}
+\begin{lstlisting}[style=sh, caption={Loading the bitstream and switching the filters}]
+bootgen -image file.bif -arch zynq -process_bitstream bin -w on
+# on the Red Pitaya:
+echo design_1_wrapper.bit.bin > /sys/class/fpga_manager/fpga0/firmware
+devmem 0x41200004 w 0     # GPIO as output
+devmem 0x41200000 w 0     # low-pass on OUT1, band-pass on OUT2
+devmem 0x41200000 w 1     # swapped
+\end{lstlisting}
+
+\subsection{Tests with the generator}
+\todo{cutoff frequencies measured on the board for both filters; look of the
+curves at high frequency}
+
+\fig{board_bandpass.png}{Band-pass filter on the board}{fig:boardbp}
+
+% =====================================================================
+\section{Conclusion}
+\todo{summary and what we learned}
+
+\section*{Attached files}
+\begin{itemize}
+  \item \texttt{filter.m}: low-pass coefficients
+  \item \texttt{fir.vhd}, \texttt{tb\_fir.vhd}: low-pass filter and testbench
+  \item encapsulating file and \texttt{ports.xdc}
+  \item band-pass coefficients script and Vivado testbench
+  \item switching \texttt{.vhd} file
+\end{itemize}
+
+\end{document}

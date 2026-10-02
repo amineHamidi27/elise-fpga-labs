@@ -1,0 +1,9 @@
+*
+!*/
+!/.gitignore
+!/README.md
+!Projet_2/Pl/*.vhd
+!Projet_2/octave/*.m
+!Projet_2/rapport/rapport.tex
+!Projet_2/rapport/figures/*.png
+!Projet_2/rapport/figures/*.jpg

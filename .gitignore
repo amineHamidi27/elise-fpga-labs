@@ -7,3 +7,10 @@
 !Projet_2/rapport/rapport.tex
 !Projet_2/rapport/figures/*.png
 !Projet_2/rapport/figures/*.jpg
+
+# Project 1 (DDS)
+!Project_1_DDS/PROJECT1_DDS/code/*.vhd
+!Project_1_DDS/PROJECT1_DDS/code/*.m
+!Project_1_DDS/PROJECT1_DDS/rapport/rapport.tex
+!Project_1_DDS/PROJECT1_DDS/rapport/figures/*.png
+!Project_1_DDS/PROJECT1_DDS/rapport/figures/*.jpg

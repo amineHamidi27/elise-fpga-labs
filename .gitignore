@@ -15,3 +15,5 @@
 !Project_1_DDS/PROJECT1_DDS/rapport/figures/*.png
 !Project_1_DDS/PROJECT1_DDS/rapport/figures/*.jpg
 !Projet_2/Pl/*.ghw
+!Projet_2/Pl/Makefile.openXC7
+!Projet_2/Pl/*.bit

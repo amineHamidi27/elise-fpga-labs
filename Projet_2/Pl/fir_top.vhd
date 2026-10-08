@@ -64,9 +64,6 @@ begin
 
 
     -- 3) process du compteur (copié de ADC_DAC.vhd)
-    --    seule modification : dans les états 4 à 7 (voie A),
-    --    remplacer dac_dat_o <= dat_a_reg  par  dac_dat_o <= std_logic_vector(fir_y)
-    --    (la voie B garde dat_b_reg : OUT2 = entrée non filtrée, pratique pour comparer)
  process
       begin
           wait until rising_edge (clk125);

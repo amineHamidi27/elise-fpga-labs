@@ -103,27 +103,64 @@
 
 % =====================================================================
 \section{Introduction}
-\todo{goal of the project: FIR filter at $f_s = 125/8 = \SI{15.625}{\mega\hertz}$,
-low-pass in VHDL, band-pass with the FIR Compiler IP, PS/PL switching of the two
-filters from Linux. Recall the FIR equation $y(n) = \sum_k b_k\,x(n-k)$.}
+A FIR (Finite Impulse Response) filter computes each output sample as a
+weighted sum of the last $N+1$ input samples:
+\[
+y(n) = \sum_{k=0}^{N} b_k\,x(n-k)
+\]
+where $N$ is the order of the filter and $b_k$ are its coefficients. In this
+project the filters run at $f_s = 125/8 = \SI{15.625}{\mega\hertz}$ instead of
+\SI{125}{\mega\hertz}: with a lower sampling rate, a cutoff frequency in the MHz
+range needs fewer coefficients.
+
+The project has three parts:
+\begin{itemize}
+  \item a 4th-order low-pass filter described in VHDL with integer
+        coefficients, simulated with GHDL and tested on the Red Pitaya
+        (openXC7 tool chain);
+  \item a 30th-order band-pass filter made with the FIR Compiler IP in Vivado;
+  \item both filters in the same design, with the processing system (PS)
+        choosing through an AXI GPIO which filter goes to which DAC output.
+\end{itemize}
 
 % =====================================================================
 \section{Low-pass filter coefficients (Octave)}
-\todo{fir1 call: order 4, $f_c = \SI{0.5}{\mega\hertz}$, $f_s = 125/8$ MHz;
-script \texttt{filter.m}; coefficients obtained}
+The script \texttt{filter.m} computes the coefficients with
+\texttt{b = fir1(4, fc/(fs/2), 'low')}, with $f_c = \SI{0.5}{\mega\hertz}$
+and $f_s = 125/8$~MHz. The cutoff frequency is normalized by the Nyquist
+frequency $f_s/2$. The order 4 gives 5 coefficients:
+\[
+b = [\,0.03496,\ 0.24070,\ 0.44867,\ 0.24070,\ 0.03496\,]
+\]
+They are symmetric (linear phase) and their sum is 1, because \texttt{fir1}
+normalizes the gain at DC to 1 (0~dB).
 
 \fig{bode_lowpass.png}{Frequency response of the 4th-order low-pass filter (freqz)}{fig:bodelp}
 
 \paragraph{Real cutoff frequency.}
-\todo{measured $-6$ dB frequency and why it is not \SI{0.5}{\mega\hertz}
-(only 5 coefficients, wide transition band)}
+With \texttt{freqz} (figure~\ref{fig:bodelp}), the gain reaches $-6$~dB at
+\SI{3.31}{\mega\hertz} ($-3$~dB at \SI{2.35}{\mega\hertz}), very far from
+the requested \SI{0.5}{\mega\hertz}. \texttt{fir1} takes the ideal impulse
+response (a sinc) and cuts it with a Hamming window. With only 5 coefficients,
+the impulse response lasts $5/f_s = \SI{320}{\nano\second}$, so the filter
+cannot select details narrower than about $f_s/5 \approx \SI{3}{\mega\hertz}$
+in frequency. The 5 samples only cover the centre of the sinc, and the
+coefficients are almost the Hamming window itself: the cutoff is set by the
+length of the filter, not by $f_c$. A cutoff at \SI{0.5}{\mega\hertz} would
+need many more coefficients.
 
 % =====================================================================
 \section{VHDL description of the low-pass filter}
 
 \subsection{Integer coefficients on 8 bits}
-\todo{lecture method: $n_F = 8 + 1 = 9$, scale $2^9 = 512$; table float /
-$\times 512$ / integer; sum = 512 (gain 1)}
+The FPGA works with integers, so the coefficients are multiplied by
+$2^{n_F}$ and rounded. With the method of the lecture, the largest coefficient
+($0.449$) can be doubled once and stay below 1, so we can use one more bit
+than the 8 bits of the coefficients: $n_F = 8 + 1 = 9$ and the scale is
+$2^9 = 512$. The largest integer coefficient is then 230, which fits on 8
+unsigned bits. Table~\ref{tab:coef} gives the result. The sum of the integer
+coefficients is exactly $18+123+230+123+18 = 512$: after division by 512
+(shift by 9 bits) the gain at DC is exactly 1.
 
 \begin{table}[H]
 \centering
@@ -131,27 +168,100 @@ $\times 512$ / integer; sum = 512 (gain 1)}
 \toprule
  & $b_0$ & $b_1$ & $b_2$ & $b_3$ & $b_4$ \\
 \midrule
-Octave            & & & & & \\
-$\times 512$      & & & & & \\
-Integer           & & & & & \\
+Octave            & 0.03496 & 0.24070 & 0.44867 & 0.24070 & 0.03496 \\
+$\times 512$      & 17.90 & 123.24 & 229.72 & 123.24 & 17.90 \\
+Integer           & 18 & 123 & 230 & 123 & 18 \\
 \bottomrule
 \end{tabular}
 \caption{Quantization of the coefficients}\label{tab:coef}
 \end{table}
 
 \subsection{Filter structure}
-\todo{entity (generics b0..b4, ports clk, enable, x, y on 14 bits unsigned);
-delay line x0..x4, products p0..p4 (22 bits), sum (23 bits), output
-\texttt{sum(22 downto 9)}; synchronous enable as in the lecture; latency}
+The entity \texttt{fir\_low} (file \texttt{fir\_low.vhd}) has the integer
+coefficients as generics (\texttt{b0}, \texttt{b1}, \texttt{b2}) and the
+ports \texttt{clk}, \texttt{enable}, \texttt{x} and \texttt{y}, with
+\texttt{x} and \texttt{y} on 14 bits unsigned. A first version
+(\texttt{fir.vhd}) used 5 multipliers. Since the coefficients are symmetric
+($b_0 = b_4$, $b_1 = b_3$), the final version adds the samples that share the
+same coefficient before multiplying (folded structure,
+figure~\ref{fig:firstruct}):
+\[
+y(n) = b_0\,[x(n) + x(n-4)] + b_1\,[x(n-1) + x(n-3)] + b_2\,x(n-2)
+\]
+so only 3 multipliers are needed. All the registers are updated on the rising
+edge of \texttt{clk} when \texttt{enable} = `1' (synchronous enable, as in the
+lecture):
+\begin{itemize}
+  \item delay line \texttt{x0} to \texttt{x4} (14 bits);
+  \item pre-additions \texttt{s04} and \texttt{s13} on 15 bits;
+  \item products \texttt{p0}, \texttt{p1}, \texttt{p2}: 15 bits $\times$ 8 bits
+        $=$ 23 bits;
+  \item sum \texttt{sum} on 23 bits, and output \texttt{y <= sum(22 downto 9)},
+        which is the division by 512.
+\end{itemize}
+The input register, the products, the sum and the output are four register
+stages, so the latency is 4 samples ($4 \times \SI{64}{\nano\second} =
+\SI{256}{\nano\second}$ at $f_s$).
 
-\fig{fir_structure.png}{Structure of the FIR filter}{fig:firstruct}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  >=Stealth, node distance=8mm and 9mm,
+  reg/.style={draw, minimum width=9mm, minimum height=7mm, font=\small},
+  op/.style={draw, circle, inner sep=1pt, minimum size=6mm, font=\small},
+  mul/.style={draw, minimum width=11mm, minimum height=6mm, font=\small}]
+  \node (x) {$x$};
+  \node[reg, right=6mm of x] (r0) {$x_0$};
+  \node[reg, right=of r0] (r1) {$x_1$};
+  \node[reg, right=of r1] (r2) {$x_2$};
+  \node[reg, right=of r2] (r3) {$x_3$};
+  \node[reg, right=of r3] (r4) {$x_4$};
+  \draw[->] (x) -- (r0); \draw[->] (r0) -- (r1); \draw[->] (r1) -- (r2);
+  \draw[->] (r2) -- (r3); \draw[->] (r3) -- (r4);
+  \node[op, below=12mm of r0] (a04) {$+$};
+  \node[op, below=12mm of r1] (a13) {$+$};
+  \draw[->] (r0) -- (a04); \draw[->] (r4.south) |- ++(0,-4mm) -| (a04.east);
+  \draw[->] (r1) -- (a13); \draw[->] (r3.south) |- ++(0,-6mm) -| (a13.east);
+  \node[mul, below=6mm of a04] (m0) {$\times b_0$};
+  \node[mul, below=6mm of a13] (m1) {$\times b_1$};
+  \node[mul, below=24mm of r2] (m2) {$\times b_2$};
+  \draw[->] (a04) -- (m0); \draw[->] (a13) -- (m1); \draw[->] (r2) -- (m2);
+  \node[op, below=8mm of m1] (sum) {$\Sigma$};
+  \draw[->] (m0) |- (sum); \draw[->] (m1) -- (sum); \draw[->] (m2) |- (sum);
+  \node[reg, right=12mm of sum, minimum width=22mm] (sh) {bits 22..9};
+  \node[right=6mm of sh] (y) {$y$};
+  \draw[->] (sum) -- node[above, font=\scriptsize]{23 bits} (sh);
+  \draw[->] (sh) -- node[above, font=\scriptsize]{14} (y);
+\end{tikzpicture}
+\caption{Folded structure of the 4th-order low-pass filter (3 multipliers)}\label{fig:firstruct}
+\end{figure}
 
 \subsection{Testbench and simulation}
-\todo{testbench: clock 64 ns, constant inputs first (impulse 512, constant 16383),
-then sine inputs at 100 kHz, 500 kHz, 3.31 MHz, 5 MHz}
+The testbench \texttt{tb\_fir\_low.vhd} uses a \SI{64}{\nano\second} clock
+($f_s$) with \texttt{enable} at `1', so one new sample is taken at each clock
+edge. It is simulated with GHDL. The inputs are:
+\begin{itemize}
+  \item an impulse of 512 during one sample: since the coefficients are scaled
+        by 512, the output must give the integer coefficients themselves;
+  \item a constant 16383 (maximum value), to check the gain at DC and that the
+        output does not overflow;
+  \item sines of amplitude 8000 around 8192 (mid-scale) at
+        \SI{100}{\kilo\hertz}, \SI{500}{\kilo\hertz}, \SI{3.31}{\mega\hertz}
+        (the real $-6$~dB frequency) and \SI{5}{\mega\hertz}.
+\end{itemize}
+
+Figure~\ref{fig:simimp} shows that the impulse response is exactly
+18, 123, 230, 123, 18, after a latency of 4 samples. With the constant input,
+the output reaches exactly 16383 after 5 samples: the gain at DC is 1 and
+there is no overflow.
 
 \fig{sim_impulse_step.png}{Simulation: impulse (512) and constant input (16383)}{fig:simimp}
 \fig{sim_sines.png}{Simulation with sine inputs (same vertical scale for $x$ and $y$)}{fig:simsin}
+
+The peak-to-peak amplitudes are measured on the simulation after the
+transient (table~\ref{tab:simgain}). The simulated gains are the same as the
+gains computed by Octave with the original coefficients: rounding the
+coefficients to 8 bits does not change the response in a visible way.
 
 \begin{table}[H]
 \centering
@@ -159,28 +269,60 @@ then sine inputs at 100 kHz, 500 kHz, 3.31 MHz, 5 MHz}
 \toprule
 Frequency & $x$ (peak to peak) & $y$ (peak to peak) & Simulated gain & Octave gain \\
 \midrule
-\SI{100}{\kilo\hertz} & & & & \\
-\SI{500}{\kilo\hertz} & & & & \\
-\SI{3.31}{\mega\hertz} & & & & \\
-\SI{5}{\mega\hertz} & & & & \\
+\SI{100}{\kilo\hertz} & 16000 & 15991 & 0.999 ($-0.0$ dB) & 0.999 \\
+\SI{500}{\kilo\hertz} & 15998 & 15753 & 0.985 ($-0.1$ dB) & 0.985 \\
+\SI{3.31}{\mega\hertz} & 15976 & 8000 & 0.501 ($-6.0$ dB) & 0.501 \\
+\SI{5}{\mega\hertz} & 15968 & 3191 & 0.200 ($-14.0$ dB) & 0.200 \\
 \bottomrule
 \end{tabular}
 \caption{Simulated attenuation compared with Octave}\label{tab:simgain}
 \end{table}
 
 \paragraph{Why 14 bits are enough at the output.}
-\todo{sum of coefficients = 512 = $2^9$, gain $\leq 1$, max sum
-$16383 \times 512 < 2^{23}$, shift by 9 bits}
+All the coefficients are positive and their sum is $512 = 2^9$. In the worst
+case all the input samples are at the maximum 16383, and the sum is
+$16383 \times 512 = 8\,388\,096 < 2^{23}$: it fits on the 23 bits of
+\texttt{sum}. After the shift by 9 bits the output is at most 16383, which
+fits on 14 bits. In other words the gain of the filter is at most 1 at every
+frequency ($|H(f)| \leq \sum b_k = 1$), so the output can never be larger than
+the input range. The 9 LSBs removed are only the fractional part brought by
+the scaling of the coefficients.
 
 % =====================================================================
 \section{Encapsulation and test on the board}
 
 \subsection{Encapsulating file}
-\todo{based on ADC\_DAC.vhd: 8-state counter at 125 MHz, enable at 125/8 MHz,
-ADC channel A to the filter, filter to the DAC}
+The encapsulating file \texttt{fir\_top.vhd} is based on the example
+\texttt{ADC\_DAC.vhd}:
+\begin{itemize}
+  \item the \SI{125}{\mega\hertz} clock of the ADC comes in on a differential
+        pair and goes through \texttt{IBUFDS} and \texttt{BUFG};
+  \item an 8-state counter (\texttt{div}, 0 to 7) runs at
+        \SI{125}{\mega\hertz}. The signal \texttt{aclk} is `1' during one
+        state out of 8, so it is a pulse at $125/8 = \SI{15.625}{\mega\hertz}$.
+        It is used as the \texttt{enable} of the filter, which is clocked at
+        \SI{125}{\mega\hertz}, and to register the ADC samples;
+  \item ADC channel A goes to the input of the filter;
+  \item the DAC has only one data bus for its two channels: the counter also
+        drives \texttt{dac\_sel}, \texttt{dac\_wrt} and \texttt{dac\_clk}, so
+        that one channel receives ADC channel B (copy of the input) and the
+        other receives the filter output.
+\end{itemize}
 
 \subsection{Synthesis}
-\todo{openXC7 commands; SITEWIRE/DSP48 error if it happens}
+The bitstream is built with the openXC7 tool chain and the file
+\texttt{Makefile.openXC7}: GHDL converts the VHDL into Verilog, Yosys does the
+synthesis, \texttt{nextpnr-xilinx} does the placement and routing, then
+\texttt{fasm2frames} and \texttt{xc7frames2bit} give the \texttt{.bit} file.
+\begin{lstlisting}[style=sh, caption={Synthesis and loading with openXC7}]
+source /home/jmfriedt/openxc7/export.sh
+make -f Makefile.openXC7          # fir_top.bit
+make -f Makefile.openXC7 load     # openFPGALoader -c digilent_hs2 fir_top.bit
+\end{lstlisting}
+Yosys is called with the option \texttt{-nodsp}: the multipliers are made with
+logic instead of DSP48 blocks. This avoids the routing error on
+\texttt{SITEWIRE/DSP48\_X1Y30/CARRYCASCIN} given by \texttt{nextpnr-xilinx}
+with DSP blocks.
 
 \subsection{First test: shifted sine}
 \todo{generator 0.5 Vpp ($-0.25$ to $+0.25$ V); observation: truncated sine with
@@ -320,14 +462,62 @@ low-pass filter we did this work by hand.
 \section{PS/PL interaction: switching the two filters}
 
 \subsection{Block design}
-\todo{TP\_M2\_source project, the two filters, the switching .vhd file, slices,
-clk\_wiz at $f_s$; bus mapping: 16 LSBs = channel A, 16 MSBs = channel B, sign
-extension on the 2 MSBs}
+We start from the project \texttt{TP\_M2\_source}, which already contains the
+processing system, an AXI GPIO and the converter blocks
+\texttt{axis\_red\_pitaya\_adc} and \texttt{axis\_red\_pitaya\_dac}. On their
+32-bit buses, the 16 LSBs are channel 1 (A) and the 16 MSBs are channel 2 (B);
+each value is a 14-bit signed number (two's complement) whose sign bit
+(bit 13) is copied on the 2 MSBs of its 16-bit half. The following blocks are
+added (figure~\ref{fig:bdfir}):
+\begin{itemize}
+  \item a third output of the clock wizard, \texttt{clk\_out3} $= f_s =
+        \SI{15.625}{\mega\hertz}$ (VCO at \SI{1000}{\mega\hertz} divided by 64),
+        which clocks both filters;
+  \item the band-pass filter: the FIR Compiler of part~3 with the same
+        settings, created with the Tcl script \texttt{add\_fir\_bandpass.tcl},
+        and a Constant IP at `1' on \texttt{s\_axis\_data\_tvalid};
+  \item the switching module \texttt{filter\_switch} (RTL module), which also
+        contains the low-pass filter \texttt{fir\_low};
+  \item a Slice IP that keeps only bit 0 of the 10-bit output
+        \texttt{gpio\_io\_o} of the AXI GPIO.
+\end{itemize}
+The input of both filters is channel A of the ADC
+(\texttt{adc\_tdata(15 downto 0)}).
 
 \fig{block_design_fir.png}{Block design with the two filters}{fig:bdfir}
 
 \subsection{Switching file}
-\todo{GPIO bit 0 = '0': low-pass on DAC A, band-pass on DAC B; '1': swapped}
+The file \texttt{filter\_switch.vhd} receives the ADC bus, the output of the
+FIR Compiler and the GPIO bit \texttt{sel}, and gives the DAC bus:
+\begin{itemize}
+  \item \texttt{sel} = `0': low-pass filter on DAC A (16 LSBs), band-pass filter
+        on DAC B (16 MSBs);
+  \item \texttt{sel} = `1': band-pass filter on DAC A, low-pass filter on DAC B.
+\end{itemize}
+Some conversions are needed between the blocks:
+\begin{itemize}
+  \item the band-pass filter takes the 16 LSBs of the ADC bus directly, since
+        they are already a signed value extended on 16 bits. Its 24-bit output
+        is divided by 512 by keeping \texttt{bp\_y(22 downto 9)} (part~3);
+  \item the low-pass filter of part~2 works with unsigned values. Inverting the
+        sign bit changes a two's complement value into an offset binary value
+        ($-8192 \ldots 8191$ becomes $0 \ldots 16383$), so the sign bit is
+        inverted before the filter and again after it. This is why
+        \texttt{fir\_low} is inside \texttt{filter\_switch}: the block design
+        only sees \texttt{std\_logic\_vector} ports;
+  \item in \texttt{axis\_red\_pitaya\_dac}, channel B is converted
+        (sign bit followed by the other 13 bits inverted), but the conversion
+        of channel A is commented out (it was changed for the DDS of
+        project~1). The same conversion is therefore done for channel A in
+        \texttt{filter\_switch}, so that both DAC outputs have the same format.
+\end{itemize}
+The selection is registered on the $f_s$ clock, and on each 16-bit half the
+2 MSBs copy the sign bit. A simulation with GHDL (with a model of the DAC
+conversion) checks that the two outputs are swapped when \texttt{sel} changes
+and that both channels give the same DAC codes.
+
+\lstinputlisting[style=vhdl, firstline=47, lastline=78,
+  caption={Main part of \texttt{filter\_switch.vhd}}]{../vivado/q4_src/filter_switch.vhd}
 
 \subsection{Programming and devmem}
 \begin{lstlisting}[style=sh, caption={Loading the bitstream and switching the filters}]

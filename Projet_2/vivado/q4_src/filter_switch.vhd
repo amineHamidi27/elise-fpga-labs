@@ -49,7 +49,7 @@ begin
 
     -- Passe-bande : entrée signée sur 16 bits, déjà étendue par l'ADC.
     bp_x <= adc_tdata(15 downto 0);
-    -- Gain ~512 dans la bande : on garde les bits 22 à 9 (gain ~1).
+    -- Gain d'environ 512 dans la bande : on garde les bits 22 à 9 (gain 1).
     bp_s <= bp_y(22 downto 9);
 
     -- Passe-bas : entrée non signée, on inverse le bit de signe

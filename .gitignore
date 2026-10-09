@@ -17,3 +17,13 @@
 !Projet_2/Pl/*.ghw
 !Projet_2/Pl/Makefile.openXC7
 !Projet_2/Pl/*.bit
+
+# Project 2: Vivado sources (Q3 testbench, Q4 switching)
+!Projet_2/vivado/projet2_fir_pb/projet2_fir_pb.srcs/sim_1/new/*.vhd
+!Projet_2/vivado/q4_src/*.vhd
+!Projet_2/vivado/q4_src/*.tcl
+
+# Project 2: Vivado sources (Q3 testbench, Q4 switching)
+!Projet_2/vivado/projet2_fir_pb/projet2_fir_pb.srcs/sim_1/new/*.vhd
+!Projet_2/vivado/q4_src/*.vhd
+!Projet_2/vivado/q4_src/*.tcl

@@ -212,25 +212,109 @@ Frequency & Input (Vpp) & Output (Vpp) & Gain (dB) \\
 \section{Band-pass filter with the FIR Compiler IP}
 
 \subsection{Coefficients (Octave)}
-\todo{fir1 order 30, band 2--2.5 MHz, $f_s = 125/8$ MHz; real cutoff
-frequencies}
+The script \texttt{filter\_pb.m} computes the 31 coefficients with
+\texttt{b = fir1(30, [2 2.5]/(fs/2), 'bandpass')}, $f_s = 125/8 = \SI{15.625}{\mega\hertz}$.
+The coefficients are symmetric (linear phase) and their sum is close to 0,
+so the gain at DC is almost zero (sum of the integer coefficients: 7, i.e. $7/512 \approx 0.014$).
+
+\paragraph{Real cutoff frequencies.}
+With \texttt{freqz} (figure~\ref{fig:bodebp}), the $-6$~dB band goes from
+\SI{1.750}{\mega\hertz} to \SI{2.734}{\mega\hertz} instead of 2 to
+\SI{2.5}{\mega\hertz}. As for the low-pass filter, \texttt{fir1} uses a window
+method, so the cutoff frequencies are not placed exactly at $-6$~dB. The
+requested band is very narrow (\SI{0.5}{\mega\hertz}, about 3\,\% of $f_s$),
+and 31 coefficients are not enough to get sharp edges: the transition bands
+are wide and the pass band becomes larger than requested.
 
 \fig{bode_bandpass.png}{Frequency response of the 30th-order band-pass filter}{fig:bodebp}
 
 \subsection{FIR Compiler configuration}
-\todo{coefficient vector, 15.625 MHz, coefficient width 8, best precision,
-signed 14-bit input, full precision output, tvalid at '1' with a Constant IP}
+The FIR Compiler IP is configured with:
+\begin{itemize}
+  \item filter options: coefficient vector filled with the 31 floating-point
+        values from Octave;
+  \item channel specification: input sampling frequency and clock frequency
+        at \SI{15.625}{\mega\hertz} (one sample per clock cycle);
+  \item implementation: signed coefficients on 8 bits with ``best precision
+        fraction length'', signed input data on 14 bits, full precision
+        output.
+\end{itemize}
+The input \texttt{s\_axis\_data\_tvalid} is set permanently to `1' with a
+Constant IP, so that the filter takes a new sample at each clock edge.
+With ``best precision'', Vivado chooses 9 fractional bits for the
+coefficients: the integer coefficients are $\mathrm{round}(b \times 2^9)$,
+which is the same scaling as for the low-pass filter:
+\[
+2,\ 4,\ 4,\ -2,\ -11,\ -16,\ -6,\ 18,\ 36,\ 28,\ -10,\ -49,\ -54,\ -15,\ 41,\
+67,\ 41,\ \dots,\ 4,\ 4,\ 2
+\]
+The full precision output is on 24 bits and the latency given in the summary
+tab is 22 clock cycles (about \SI{1.4}{\micro\second}).
 
-\fig{fir_compiler.png}{FIR Compiler block design}{fig:fircomp}
+\fig{fir_compiler.png}{Block design of the band-pass filter: FIR Compiler with \texttt{s\_axis\_data\_tvalid} set to `1' by a Constant IP}{fig:fircomp}
 
 \subsection{Simulation in Vivado}
-\todo{testbench, latency (summary tab), results}
+The testbench \texttt{tb\_fir.vhd} instantiates the block design with a
+\SI{64}{\nano\second} clock (\SI{15.625}{\mega\hertz}). The input is a
+14-bit signed value, sign-extended on the 16 bits of
+\texttt{s\_axis\_data\_tdata}. The test has two parts:
+\begin{itemize}
+  \item an impulse of 8191 during one sample: after the latency, the output
+        gives the integer coefficients multiplied by 8191 (impulse response);
+  \item three sines of amplitude 4000 (1000 samples each, \SI{64}{\micro\second}):
+        \SI{0.5}{\mega\hertz} (stop band), \SI{2.25}{\mega\hertz} (pass band)
+        and \SI{5}{\mega\hertz} (stop band).
+\end{itemize}
+The simulation lasts \SI{210}{\micro\second} (\texttt{run 210 us} in the Tcl
+console).
 
-\fig{sim_bandpass.png}{Simulation of the band-pass filter}{fig:simbp}
+\fig{sim_bandpass.png}{Simulation of the band-pass filter: impulse, then sines at 0.5, 2.25 and 5 MHz}{fig:simbp}
+
+Figure~\ref{fig:simbp} shows the expected behaviour: the output only appears
+after the 22 cycles of latency, the sine at \SI{2.25}{\mega\hertz} passes with
+a large amplitude, and the sines at \SI{0.5}{\mega\hertz} and
+\SI{5}{\mega\hertz} are almost completely removed. At the start and at the end
+of each sine there is a short transient of 31 samples (about
+\SI{2}{\micro\second}), the time needed to fill the delay line. The strange
+look of the \SI{5}{\mega\hertz} input comes from the display: there are only
+about 3 samples per period.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+Frequency & Band & Gain (integer coefficients) & Output amplitude for $|x| = 4000$ \\
+\midrule
+\SI{0.5}{\mega\hertz}  & stop & $\approx 3.4$   & $\approx 14\,000$ \\
+\SI{2.25}{\mega\hertz} & pass & $\approx 512$   & $\approx 2\,000\,000$ \\
+\SI{5}{\mega\hertz}    & stop & $\approx 0.1$   & $\approx 400$ \\
+\bottomrule
+\end{tabular}
+\caption{Expected gains of the band-pass filter (Octave, quantized coefficients)}\label{tab:bpgain}
+\end{table}
 
 \paragraph{Output on 14 bits.}
-\todo{which bits to keep for a 14-bit output, effect on the gain, comparison with
-the low-pass filter}
+The coefficients are multiplied by $2^9 = 512$, so in the pass band the full
+precision output is about 512 times the input (\num{4000} gives about
+\num{2000000}). To get a 14-bit output we must divide by $2^9$, so we keep the
+bits \texttt{data\_out(22 downto 9)}. The 9 LSBs are only the fractional part,
+and bit 23 is a copy of the sign bit for normal signals. With this choice the
+gain in the pass band is about 1 (0~dB), as in Octave. If we kept the 14 MSBs
+(\texttt{data\_out(23 downto 10)}), we would divide by $2^{10}$ and the gain
+would drop to about $1/2$ ($-6$~dB).
+
+\paragraph{Comparison with the low-pass filter.}
+The principle is the same as for the low-pass filter: coefficients on 8 bits
+scaled by 512, and output taken from bit 22 down to bit 9
+(\texttt{sum(22 downto 9)}). The difference is the worst case. For the
+low-pass filter all the coefficients are positive and their sum is exactly
+512: the gain is at most 1 and the output can never overflow 14 bits. For the
+band-pass filter the coefficients have both signs: the sum of their absolute
+values is 659, so the worst-case gain is $659/512 \approx 1.29$. For a sine
+the gain stays at or below 1 and 14 bits are enough, but a specially built
+signal could saturate slightly. Finally, with the IP, Vivado chooses the
+fixed-point format and the output width (24 bits) itself, whereas for the
+low-pass filter we did this work by hand.
 
 % =====================================================================
 \section{PS/PL interaction: switching the two filters}

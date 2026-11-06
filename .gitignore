@@ -27,3 +27,21 @@
 !Projet_2/vivado/projet2_fir_pb/projet2_fir_pb.srcs/sim_1/new/*.vhd
 !Projet_2/vivado/q4_src/*.vhd
 !Projet_2/vivado/q4_src/*.tcl
+
+
+# Project 3 (SPI)
+!Projet_3/q1/*.vhd
+!Projet_3/q1/*.gtkw
+!Projet_3/q1/Makefile.openXC7
+!Projet_3/q1/Makefile.local
+!Projet_3/q1/ports.xdc
+!Projet_3/q1/README*.md
+!Projet_3/q1/figures/*.png
+!Projet_3/q1/figures/*.jpg
+!Projet_3/q1/figures/state_diagram.tex
+!Projet_3/q1/figures/state_diagram.pdf
+!Projet_3/q1/test_spi_tx/*.vhd
+!Projet_3/q1/test_spi_tx/*.bit
+!Projet_3/q1/test_spi_tx/Makefile.openXC7
+!Projet_3/q1/test_spi_tx/ports.xdc
+!Projet_3/q1/*.bit

@@ -1,0 +1,16 @@
+[timestart] 0
+[size] 1700 420
+[pos] 0 0
+*-21.000000 0 -1 -1 -1 -1
+[sst_width] 1
+[signals_width] 110
+[sst_expanded] 0
+@28
+top.tb_fsm_spi.clk
+top.tb_fsm_spi.button
+top.tb_fsm_spi.fin
+@22
+top.tb_fsm_spi.uut.state
+@28
+top.tb_fsm_spi.fsync
+top.tb_fsm_spi.enable

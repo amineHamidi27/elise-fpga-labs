@@ -1,0 +1,17 @@
+[timestart] 0
+[size] 1800 430
+[signals_width] 150
+[sst_width] 1
+@28
+top.tb_spi_system.button
+@22
+top.tb_spi_system.data[15:0]
+top.tb_spi_system.inst_fsm_spi.state
+@28
+top.tb_spi_system.fsync
+top.tb_spi_system.enable
+top.tb_spi_system.sclk
+top.tb_spi_system.sdata
+top.tb_spi_system.fin
+@24
+top.tb_spi_system.inst_spi_tx.bit_counter

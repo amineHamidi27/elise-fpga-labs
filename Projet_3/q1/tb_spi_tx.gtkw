@@ -1,0 +1,15 @@
+[timestart] 0
+[size] 1400 600
+*-26.000000 0 -1 -1 -1 -1
+@28
+top.tb_spi_tx.clk
+top.tb_spi_tx.enable
+@22
+top.tb_spi_tx.data[15:0]
+@28
+top.tb_spi_tx.sclk
+top.tb_spi_tx.sdata
+top.tb_spi_tx.fin
+@24
+top.tb_spi_tx.uut.count
+top.tb_spi_tx.uut.bit_counter

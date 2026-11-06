@@ -87,24 +87,24 @@ begin
 
     process(nibble)
     begin
-        case nibble is
-            when x"0" => gfedcba <= "0111111";
-            when x"1" => gfedcba <= "0000110";
-            when x"2" => gfedcba <= "1011011";
-            when x"3" => gfedcba <= "1001111";
-            when x"4" => gfedcba <= "1100110";
-            when x"5" => gfedcba <= "1101101";
-            when x"6" => gfedcba <= "1111101";
-            when x"7" => gfedcba <= "0000111";
-            when x"8" => gfedcba <= "1111111";
-            when x"9" => gfedcba <= "1101111";
-            when x"A" => gfedcba <= "1110111";
-            when x"B" => gfedcba <= "1111100";
-            when x"C" => gfedcba <= "0111001";
-            when x"D" => gfedcba <= "1011110";
-            when x"E" => gfedcba <= "1111001";
-            when x"F" => gfedcba <= "1110001";
-            when others => gfedcba <= "0000000";
+        case nibble is   -- active-low display: '0' turns a segment on
+            when "0000" => gfedcba <= "1000000"; -- 0
+            when "0001" => gfedcba <= "1111001"; -- 1
+            when "0010" => gfedcba <= "0100100"; -- 2
+            when "0011" => gfedcba <= "0110000"; -- 3
+            when "0100" => gfedcba <= "0011001"; -- 4
+            when "0101" => gfedcba <= "0010010"; -- 5
+            when "0110" => gfedcba <= "0000010"; -- 6
+            when "0111" => gfedcba <= "1111000"; -- 7
+            when "1000" => gfedcba <= "0000000"; -- 8
+            when "1001" => gfedcba <= "0010000"; -- 9
+            when "1010" => gfedcba <= "0001000"; -- A
+            when "1011" => gfedcba <= "0000011"; -- b
+            when "1100" => gfedcba <= "1000110"; -- C
+            when "1101" => gfedcba <= "0100001"; -- d
+            when "1110" => gfedcba <= "0000110"; -- E
+            when "1111" => gfedcba <= "0001110"; -- F
+            when others => gfedcba <= "1111111"; -- off
         end case;
     end process;
 

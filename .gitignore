@@ -45,3 +45,15 @@
 !Projet_3/q1/test_spi_tx/Makefile.openXC7
 !Projet_3/q1/test_spi_tx/ports.xdc
 !Projet_3/q1/*.bit
+!Projet_3/q1/test_spi_tx/Makefile.local
+
+# Project 3, part 2 (Vivado PS/PL): sources only, not the generated files
+!Projet_3/q2/*.vhd
+!Projet_3/q2/spi.bif
+!Projet_3/q2/project_3_spi2026/project_3_spi2026.xpr
+!Projet_3/q2/project_3_spi2026/project_3_spi2026.srcs/sources_1/bd/design_1/design_1.bd
+!Projet_3/q2/project_3_spi2026/project_3_spi2026.srcs/sources_1/imports/**/*.vhd
+!Projet_3/q2/project_3_spi2026/project_3_spi2026.srcs/sources_1/imports/**/*.vhdl
+!Projet_3/q2/project_3_spi2026/project_3_spi2026.srcs/constrs_1/**/*.xdc
+!Projet_3/q2/project_3_spi2026/project_3_spi2026.runs/impl_1/design_1_wrapper.bit.bin
+Projet_3/q2/project_3_spi2026/project_3_spi2026.srcs/sources_1/imports/PL/

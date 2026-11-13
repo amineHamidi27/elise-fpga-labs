@@ -39,7 +39,7 @@ begin
         port map (
             clk    => clk,
             enable => enable,
-            data   => x"2200", -- Mot de configuration du DDS
+            data   => x"A5A5", -- Mot de configuration du DDS
             sclk   => sclk,
             sdata  => sdata,
             fin    => fin
